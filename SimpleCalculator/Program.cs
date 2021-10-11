@@ -1,408 +1,250 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace SimpleCalculator
 {
-    class Fraction
-    {
-        public long Numerator { get; set; }
-        public long Denominator { get; set; }
-        public Fraction()
-        {
-
-        }
-        public Fraction(long numerator, long denominator)
-        {
-            Numerator = numerator;
-            if (denominator == 0)
-                throw new DivideByZeroException("Ошибка: знаменатель не может быть равен нулю.");
-            Denominator = denominator;
-        }
-        public override string ToString() => $"{Numerator}/{Denominator}";
-
-        static public Fraction Parse(string s)
-        {
-            checked
-            {
-                Fraction fraction = new Fraction();
-                if (s.Contains('.'))
-                {
-                    try
-                    {
-                        long integer = long.Parse(s.Remove(s.IndexOf("."), s.Length - s.IndexOf(".")));
-                        long fractional = long.Parse(s.Remove(0, s.IndexOf(".") + 1));
-                        double power = Math.Pow(10, fractional.ToString().Length);
-
-                        fraction.Numerator = fractional + (integer * (long)power);
-                        fraction.Denominator = (long)power;
-                        fraction = Reduction(fraction);
-                    }
-                    catch
-                    {
-                        throw new ArgumentException("Ошибка: неверно записана десятичная дробь.");
-                    }
-                }
-                else
-                {
-                    fraction.Numerator = long.Parse(s);
-                    fraction.Denominator = 1;
-                }
-                return fraction;
-            }
-        }
-        static public long GCF(long a, long b)
-        {
-            while (b != 0)
-            {
-                long temp = b;
-                b = a % b;
-                a = temp;
-            }
-            return a;
-        }
-        static public long LCM(long a, long b)
-        {
-            return (a / GCF(a, b)) * b;
-        }
-        static public double GetDouble(Fraction a)
-        {
-            return (a.Numerator * 1.0) / a.Denominator;
-        }
-        static public Fraction Reduction(Fraction a)
-        {
-            long gcf = GCF(a.Numerator, a.Denominator);
-            a.Numerator /= gcf;
-            a.Denominator /= gcf;
-
-            if (a.Denominator < 0)
-            {
-                a.Numerator *= -1;
-                a.Denominator *= -1;
-            }
-            return a;
-        }
-        static private Fraction ZeroCheck(Fraction a)
-        {
-            if (a.Denominator == 0)
-                throw new DivideByZeroException($"Ошибка: попытка деления на нуль - {a}");
-            return a;
-        }
-
-        static public Fraction Addition(Fraction b, Fraction a)
-        {
-            checked
-            {
-                long lcm = LCM(a.Denominator, b.Denominator);
-
-                a.Numerator *= (lcm / a.Denominator);
-                b.Numerator *= (lcm / b.Denominator);
-                a.Numerator += b.Numerator;
-                a.Denominator = lcm;
-                return Reduction(ZeroCheck(a));
-            }
-        }
-        static public Fraction Subtraction(Fraction b, Fraction a)
-        {
-            checked
-            {
-                long lcm = LCM(a.Denominator, b.Denominator);
-
-                a.Numerator *= (lcm / a.Denominator);
-                b.Numerator *= (lcm / b.Denominator);
-                a.Numerator -= b.Numerator;
-                a.Denominator = lcm;
-                return Reduction(ZeroCheck(a));
-            }
-        }
-        static public Fraction Multiplication(Fraction b, Fraction a)
-        {
-            checked
-            {
-                a.Numerator *= b.Numerator;
-                a.Denominator *= b.Denominator;
-                return Reduction(ZeroCheck(a));
-            }
-        }
-        static public Fraction Division(Fraction b, Fraction a)
-        {
-            checked
-            {
-                a.Numerator *= b.Denominator;
-                a.Denominator *= b.Numerator;
-                return Reduction(ZeroCheck(a));
-            }
-        }
-    }
     class Calculator
     {
-        static readonly Stack<Fraction> numbers = new Stack<Fraction>();
-        static readonly Stack<Token> operators = new Stack<Token>();
-        static readonly Queue<Token> tokens = new Queue<Token>();
+        private static bool IsUnary(char c)
+        {
+            return '+' == c || '-' == c;
+        }
 
-        enum TokenType
+        private static bool IsDelimeter(char c)
         {
-            Delimeter,
-            Brackets,
-            Number
+            return '+' == c || '-' == c || '*' == c || '/' == c || '(' == c || ')' == c;
         }
-        class Token
+
+        private static byte Type(string s)
         {
-            public TokenType Type { get; }
-            public string Value { get; }
-            public int Priority { get; }
-            public override string ToString() => $"{Type}: {Value}: {Priority}";
-            public Token(TokenType type, string value, int priority)
+            if (s.Length == 1 && IsDelimeter(s[0]) || s == "-(" || s == "+(")
+                return 0;
+            return 1;
+        }
+
+        private static byte Priority(string s)
+        {
+            switch (s)
             {
-                Type = type;
-                Value = value;
-                Priority = priority;
-            }
-        }
-       
-        static private void Calculate()
-        {
-            if (numbers.Count >= 2 && operators.Count >= 1)
-                switch (operators.Pop().Value)
-                {
-                    case "+":
-                        numbers.Push(Fraction.Addition(numbers.Pop(), numbers.Pop()));
-                        break;
-                    case "-":
-                        numbers.Push(Fraction.Subtraction(numbers.Pop(), numbers.Pop()));
-                        break;
-                    case "*":
-                        numbers.Push(Fraction.Multiplication(numbers.Pop(), numbers.Pop()));
-                        break;
-                    case "/":
-                        numbers.Push(Fraction.Division(numbers.Pop(), numbers.Pop()));
-                        break;
-                    case "(":
-                        throw new ArgumentException("Ошибка: потеряны закрывающиеся скобки.");
-                    default:
-                        throw new ArgumentException("Ошибка: выражение записано неправильно.");
-                }
-            else
-                throw new ArgumentException("Ошибка: выражение записано неправильно.");
-        }
-        static private int Priority(char c)
-        {
-            switch (c)
-            {
-                case '*':
-                case '/':
+                case "*":
+                case "/":
                     return 3;
 
-                case '+':
-                case '-':
+                case "+":
+                case "-":
                     return 2;
 
-                case '=':
-                case '(':
-                case ')':
+                case "(":
+                case "-(":
+                case "+(":
+                case ")":
                     return 1;
                 default:
                     return 0;
             }
         }
-        static private bool IsDelimeter(char c)
-        {
-            char[] delimeters = { '+', '-', '*', '/', '(', ')', '=' };
-            if (delimeters.Contains(c))
-                return true;
-            return false;
-        }
-        static private void GetTokens(string s)
-        {
-            if (s.Length > 0)
-            {
-                int i = 0;
-                tokens.Clear();
-                string temp = null;
-                bool isUnary = false;
-                char[] unaryOperators = { '+', '-' };
-                s = s.Replace("·", "*").Replace("×", "*").Replace("⋅", "*").Replace("∙", "*").Replace("∗", "*");
-                s = s.Replace("∶", "/").Replace(":", "/").Replace("÷", "/").Replace("∕", "/").Replace("⁄", "/");
-                s = s.Replace("＋", "+").Replace("−", "-").Replace("－", "-");
-                s = s.Replace(',', '.').Replace(" ", "");
 
-                while (i < s.Length)
-                {
-                    if (unaryOperators.Contains(s[i]) && i == 0 && s.Length > 1 && char.IsDigit(s[i + 1]) ||
-                        unaryOperators.Contains(s[i]) && i > 0 && i < s.Length - 1 && IsDelimeter(s[i - 1]) && s[i - 1] != ')' && char.IsDigit(s[i + 1]))
-                    {
+        private static Queue<string> GetTokens(string raw)
+        {
+            Queue<string> tokens = new Queue<string>();
+            if (raw.Length > 0)
+            {
+                bool isUnary = false;
+                raw = raw.Replace("·", "*").Replace("×", "*").Replace("⋅", "*").Replace("∙", "*").Replace("∗", "*");
+                raw = raw.Replace("∶", "/").Replace(":", "/").Replace("÷", "/").Replace("∕", "/").Replace("⁄", "/");
+                raw = raw.Replace("＋", "+").Replace("−", "-").Replace("－", "-");
+                raw = raw.Replace(',', '.').Replace(" ", "");
+
+                for (int i = 0; i < raw.Length;)
+                    if (IsUnary(raw[i]) && i == 0 && raw.Length > 1 ||
+                        IsUnary(raw[i]) && i > 0 && i < raw.Length - 1 && IsDelimeter(raw[i - 1]) && raw[i - 1] != ')' && (char.IsDigit(raw[i + 1]) || raw[i + 1] == '('))
+                    {                        
                         isUnary = true;
                         i++;
                     }
-                    else if (IsDelimeter(s[i]))
+                    else if (char.IsDigit(raw[i]))
                     {
-                        if (s[i] == '(' && (i == 0 || IsDelimeter(s[i - 1])) ||
-                            s[i] == ')' && i > 0 && i == s.Length - 1 && (char.IsDigit(s[i - 1]) || IsDelimeter(s[i - 1]) && s[i - 1] != '(') ||
-                            s[i] == ')' && i > 0 && i < s.Length - 1 && (char.IsDigit(s[i - 1]) || IsDelimeter(s[i - 1]) && s[i - 1] != '(') && IsDelimeter(s[i + 1]))
-                            tokens.Enqueue(new Token(TokenType.Brackets, s[i].ToString(), Priority(s[i])));
-                        else if (s[i] == '=' && s.IndexOf('=') != s.Length - 1)
-                            throw new ArgumentException("Ошибка: знак равенства не в конце выражения.");
-                        else if (s[i] != '=')
-                            tokens.Enqueue(new Token(TokenType.Delimeter, s[i].ToString(), Priority(s[i])));
-                        i++;
-                    }
-                    else if (char.IsDigit(s[i]))
-                    {
-                        if (isUnary)
-                            temp += s[i - 1];
+                        string temp = null;
 
-                        while (i < s.Length && !IsDelimeter(s[i]))
+                        if (isUnary)
+                            temp += raw[i - 1];
+                       
+                        while (i < raw.Length && !IsDelimeter(raw[i]))
                         {
-                            if (char.IsDigit(s[i]) || s[i] == '.' && !(s[i - 1] == '.'))
-                                temp += s[i];
-                            else
-                                throw new ArgumentException("Ошибка: выражение записано неправильно.");
+                            if (char.IsDigit(raw[i]) || raw[i] == '.' && !(raw[i - 1] == '.'))
+                                temp += raw[i];
+                            else                               
+                                throw new ArgumentException($"Ошибка: выражение записано неправильно.\nНа позиции: {i + 1}");
                             i++;
                         }
 
-                        tokens.Enqueue(new Token(TokenType.Number, temp, 0));
+                        tokens.Enqueue(temp);
                         isUnary = false;
-                        temp = null;
+                    }
+                    else if (IsDelimeter(raw[i]))
+                    {
+                        if (!isUnary)
+                            tokens.Enqueue("" + raw[i]);
+                        else
+                            tokens.Enqueue("" + raw[i - 1] + raw[i]);
+                        isUnary = false;
+                        i++;
+                    }
+                    else if (raw[i] == '=' && i == raw.Length - 1)
+                    {
+                        i++;
                     }
                     else
                     {
-                        throw new ArgumentException("Ошибка: неправильный символ -> " + s[i]);
+                        throw new ArgumentException($"Ошибка: неожиданный символ -> {raw[i]}\nНа позиции: {i + 1}");
                     }
-                }
             }
             else
             {
                 throw new ArgumentException("Ошибка: пустое выражение.");
             }
+            return tokens;
         }
 
-        static public void CalculatorInfo()
+        private static void Eval(Stack<Fraction> numbers, Stack<string> operators)
         {
-            Console.WriteLine("\nПоддерживаемые операции: '+', '-', '*', '/', '(', ')'.\n" +
-                "Поддерживаемые записи: '-5', '1/2', '0,5', '0.5'.\n" +
-                "Примеры записи: '2+2*2', '(2+2)*2', '1/2*-2', '1,2*1.5'.\n");
-        }
-        static public Fraction Solve(string expression)
+            if (numbers.Count >= 2 && operators.Count >= 1)
+            {
+                Fraction right = numbers.Pop();
+                Fraction left = numbers.Pop();
+                switch (operators.Pop())
+                {
+                    case "+":
+                        numbers.Push(Fraction.Addition(left, right));
+                        break;
+                    case "-":
+                        numbers.Push(Fraction.Subtraction(left, right));
+                        break;
+                    case "*":
+                        numbers.Push(Fraction.Multiplication(left, right));
+                        break;
+                    case "/":
+                        numbers.Push(Fraction.Division(left, right));
+                        break;
+                    case "(":
+                        throw new ArgumentException("Ошибка: потеряны закрывающиеся скобки.");
+                    default:
+                        throw new ArgumentException("Ошибка: выражение записано неправильно.\nОшибка в операторах.");
+                }
+            }
+            else
+            {
+                throw new ArgumentException("Ошибка: выражение записано неправильно.\nНесоответствие количества операторов и чисел.");
+            }
+        }       
+
+        public static Fraction GetEval(string expression)
         {
             try
             {
-                GetTokens(expression);
-                numbers.Clear();
-                operators.Clear();
+                Stack<Fraction> numbers = new Stack<Fraction>();
+                Stack<string> operators = new Stack<string>();
+                Queue<string> tokens = GetTokens(expression);
 
                 while (tokens.Count > 0)
-                {
-                    if (tokens.Peek().Type == TokenType.Number)
-                    {
-                        numbers.Push(Fraction.Parse(tokens.Dequeue().Value));
+                    if (Type(tokens.Peek()) == 1)
+                    {                       
+                        numbers.Push(Fraction.Parse(tokens.Dequeue()));
                     }
-                    else if (tokens.Peek().Type == TokenType.Delimeter)
+                    else if (Type(tokens.Peek()) == 0)
                     {
-                        if (operators.Count == 0)
+                        if (tokens.Peek().Contains("("))
                         {
                             operators.Push(tokens.Dequeue());
                         }
-                        else
+                        else if (tokens.Peek().Equals(")"))
                         {
-                            if (operators.Peek().Priority >= tokens.Peek().Priority)
-                                while (operators.Count > 0 && operators.Peek().Priority >= tokens.Peek().Priority)
-                                    Calculate();
-                            operators.Push(tokens.Dequeue());
-                        }
-                    }
-                    else if (tokens.Peek().Type == TokenType.Brackets)
-                    {
-                        if (tokens.Peek().Value == "(")
-                        {
-                            operators.Push(tokens.Dequeue());
-                        }
-                        else if (tokens.Dequeue().Value == ")")
-                        {
-                            while (operators.Count > 0 && operators.Peek().Value != "(")
-                                Calculate();
+                            tokens.Dequeue();
+                            while (operators.Count > 0 && !operators.Peek().Contains("("))
+                                Eval(numbers, operators);
 
-                            if (operators.Count > 0 && operators.Peek().Value == "(")
+                            if (operators.Peek().Equals("-("))
+                            {
+                                Console.WriteLine(0);
+                                Fraction fraction = numbers.Pop();
+                                fraction.Numerator *= -1;
+                                numbers.Push(fraction);
+                            }
+
+                            if (operators.Count > 0 && operators.Peek().Contains("("))
                                 operators.Pop();
                             else
                                 throw new ArgumentException("Ошибка: потеряны открывающиеся скобки.");
                         }
+                        else
+                        {
+                            while (operators.Count > 0 && Priority(operators.Peek()) >= Priority(tokens.Peek()))
+                                Eval(numbers, operators);
+                            operators.Push(tokens.Dequeue());
+                        }
                     }
-                }
 
                 while (operators.Count > 0)
-                    Calculate();
+                    Eval(numbers, operators);
 
                 if (numbers.Count == 1 && operators.Count == 0)
                     return numbers.Pop();
-                throw new ArgumentException("Ошибка: выражение записано неправильно.");
+                throw new ArgumentException("Ошибка: выражение записано неправильно.\nНесоответствие количества операторов и чисел.");
             }
             catch (OverflowException)
             {
                 throw new OverflowException("Ошибка: вычисления вышли за доступные границы.");
             }
         }
+
+        public static void GetInfo()
+        {
+            Console.WriteLine("\nПоддерживаемые операции: '+', '-', '*', '/', '(', ')'.\n" +
+                "Поддерживаемые записи: '-5', '1/2', '0,5', '0.5'.\n" +
+                "Примеры записи: '2+2*2', '(2+2)*2', '1/2*-2', '1,2*1.5'.\n");
+        }
     }
 
     class Program
     {
-        static public void ColorPrint(string s, ConsoleColor c = ConsoleColor.Red)
+        static public void ColorPrint(string message, ConsoleColor color = ConsoleColor.Red)
         {
             ConsoleColor temp = Console.ForegroundColor;
-            Console.ForegroundColor = c;
-            Console.WriteLine(s);
+            Console.ForegroundColor = color;
+            Console.WriteLine(message);
             Console.ForegroundColor = temp;
         }
-        static void Main(string[] args)
+        static void Main()
         {
-            if (args.Length != 0)
+            bool stop = false;
+            while (!stop)
             {
-                string expression = null;
-                foreach (string a in args)
-                    expression += a;
-
                 try
                 {
-                    Fraction fraction = Calculator.Solve(expression);
-                    string answer = $"Ответ: {fraction} = {Fraction.GetDouble(fraction)}";
-                    ColorPrint(answer, ConsoleColor.Green);
+                    Console.Clear();
+                    Console.WriteLine("Простой калькулятор.\n I-Получить справку.\n");
+                    Console.Write("Введите команду: ");
+
+                    string expression = Console.ReadLine();
+                    if (expression.ToLower() == "i")
+                    {
+                        Calculator.GetInfo();
+                    }
+                    else
+                    {
+                        Fraction fraction = Calculator.GetEval(expression);
+                        string answer = $"Ответ: {fraction} = {Fraction.GetDouble(fraction)}";
+                        ColorPrint(answer, ConsoleColor.Green);
+                    }
                 }
                 catch (Exception e)
                 {
                     ColorPrint(e.Message);
-                }               
-            }
-            else
-            {
-                bool stop = false;
-                while (!stop)
-                {
-                   try
-                    {
-                        Console.Clear();
-                        Console.WriteLine("Простой калькулятор.\n I-Получить справку.\n");
-                        Console.Write("Введите команду: ");
-
-                        string expression = Console.ReadLine();
-                        if (expression.ToLower() == "i")
-                        {
-                            Calculator.CalculatorInfo();
-                        }
-                        else
-                        {
-                            Fraction fraction = Calculator.Solve(expression);
-                            string answer = $"Ответ: {fraction} = {Fraction.GetDouble(fraction)}";
-                            ColorPrint(answer, ConsoleColor.Green);
-                        }
-                    }                    
-                    catch (Exception e)
-                    {
-                        ColorPrint(e.Message);
-                    }                    
-
-                    Console.Write("\nВведите 'N' для завершения программы: ");
-                    if (Console.ReadLine().ToLower() == "n")
-                        stop = true;
                 }
+
+                Console.Write("\nВведите 'N' для завершения программы: ");
+                if (Console.ReadLine().ToLower() == "n")
+                    stop = true;
             }
         }
     }
